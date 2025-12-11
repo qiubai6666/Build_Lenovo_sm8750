@@ -31,7 +31,13 @@ on:
         default: false
         type: boolean
 
-      enable_feature_d:
+      enable_feature_b:
+        description: "开启KPM"
+        required: false
+        default: true
+        type: boolean
+
+      enable_feature_c:
         description: "使用AOSP密钥签名boot"
         required: false
         default: true
@@ -290,11 +296,17 @@ jobs:
 
           
       - name: 🔧 Set gki_defconfig (设置编译配置)
+        env:
+          ENABLE_B: ${{ github.event.inputs.enable_feature_b }} 
         run: |
           cd kernel_workspace
           echo "CONFIG_KSU=y" >> ./common/arch/arm64/configs/gki_defconfig
           # Add VFS configuration settings
-          echo "CONFIG_KPM=y" >> ./common/arch/arm64/configs/gki_defconfig
+          if [ "$ENABLE_B" = "true" ]; then
+            echo "CONFIG_KPM=y" >> ./common/arch/arm64/configs/gki_defconfig
+          else
+            echo "CONFIG_KPM=n" >> ./common/arch/arm64/configs/gki_defconfig
+          fi
           echo "CONFIG_CRYPTO_LZ4=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_CRYPTO_LZ4HC=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_CRYPTO_LZ4KD=y" >> ./common/arch/arm64/configs/gki_defconfig
@@ -429,6 +441,7 @@ jobs:
           df -h
 
       - name: 📦 Apply KPM and patch the kernel (应用KPM并修补内核)
+        if: ${{inputs.enable_feature_b}}
         run: |
           echo "正在应用KPM并修补内核..."
           cd kernel_workspace/common/out/arch/arm64/boot
@@ -450,7 +463,7 @@ jobs:
          path: kernel_workspace/common/out/arch/arm64/boot/kernel
          
       - name: 📦 Sign boot using AOSP test key (使用AOSP测试密钥签名boot)
-        if: ${{inputs.enable_feature_d}}
+        if: ${{inputs.enable_feature_c}}
         run: |
           cd kernel_workspace
           aria2c -s16 -x16 -k1M "https://github.com/showdo/AOSP-Testkey-BootSigner/archive/refs/heads/main.tar.gz" -o boot_avb_tool.tar.gz && \
@@ -467,7 +480,7 @@ jobs:
           python3 rebuild_avb.py --chained-mode
 
       - name: 📤 Upload Signed boot (上传已签名的 boot)
-        if: ${{inputs.enable_feature_d}}
+        if: ${{inputs.enable_feature_c}}
         uses: actions/upload-artifact@v4
         with:
          name: Boot_${{ env.KSUVER }}_${{ env.sub_level }}_SuKiSU_AOSP_Signed
